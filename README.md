@@ -1,4 +1,3 @@
 # practicalmachinelearning
-# Github repository for Data Science Cuurriculum - JHU / Coursera
+## Github repository for Data Science PML course project
 
-Repository for PML course project
