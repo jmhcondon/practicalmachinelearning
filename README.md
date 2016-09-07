@@ -1,2 +1,2 @@
 # practicalmachinelearning
-Repository for PML course project
+Repository for JHU Coursera Practical Machine Learning
