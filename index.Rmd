@@ -2,29 +2,256 @@
 title: "Practical Machine Learning Course Project"
 author: "John Condon"
 date: "September 7, 2016"
-output: html_document
+output:
+  html_document:
+    keep_md: yes
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Project Overview
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+The goal of this project is to use data from accelerometers on the belt, forearm,
+arm, and dumbell of 6 participants whether they are using proper form to lift 
+a dumbell.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+
+The Classe result factor has values A, B, C, D, and E.  Class A corresponds
+to the correct execution of the exercise, while the other 4 classes
+correspond to common mistakes.
+
+Data was recorded using inertial measurement units (IMU), providing three-axes
+acceleration, gyroscope and magnetometer data.  Each IMU also featured a Bluetooth
+module that streamed the recorded data to a notebook. The sensors were mounted
+in the users’ glove, armband, lumbar belt and dumbbell (see Figure), making the
+tracking system as unobtrusive as possible.
+
+![](SensingSetup.png)
+![](pitch.yaw.roll.png)
+
+Participants performed one set of 10 repetitions of the Unilateral Dumbbell 
+Biceps Curl in each of five different manners: 
+
+* Classe A - executed exactly as specified
+* Classe B - elbows thrown to front
+* Classe C - lifted only halfway
+* Classe D - lowered only halfway
+* Classe E - hips thrown to front
+
+
+
+
+### Load required libraries
+
+All the libraries needed for the selected machine learning algorithms are first
+loaded into the environment.
+
+```{r load.libraries, include=FALSE}
+
+# ipak function: install and load multiple R packages.
+# check to see if packages are installed. Install them if they are not, then load them into the R session.
+
+ipak <- function(pkg){
+    new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+    if (length(new.pkg)) 
+        install.packages(new.pkg, dependencies = TRUE)
+    sapply(pkg, require, character.only = TRUE)
+}
+
+# usage
+packages <- c("ggplot2", "dplyr", "tidyr", "tibble", "caret", "randomForest",
+              "neuralnet", "gbm", "e1071", "nnet", "devtools",
+              "xtable")
+ipak(packages)
+options(xtable.floating = FALSE)
+options(xtable.timestamp = "")
+options(xtable.comment = FALSE)
+
+source_url('https://gist.githubusercontent.com/fawda123/7471137/raw/466c1474d0a505ff044412703516c34f1a4684a5/nnet_plot_update.r')
+
+
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+### Read and clean project data
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+The project training and testing data sets should be downloaded from the source 
+urls to the project directory and then read as .csv files into R.
+
+* https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+* https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r getdata, cache=TRUE}
+pmlTrain <- read.csv("./pml-training.csv")
+pmlTest = read.csv("./pml-testing.csv")
+
+```
+The datasets contain 160 columns.  The training dataset has 19622 rows and the
+test dataset has 20. The first 7 column attributes do not contain
+accelerometer measures, so they will be excluded as predictors.  Column 160 is 
+the target prediction variable, classe. Structural queries reveal that many 
+columns are primarily NA's.   Also, some columns are integer and others numeric.
+
+First, we'll drop the first 7 columns and coerce all columns to numeric, with 
+the exception of the classe column, 160.
+
+```{r make.numeric}
+pmlTrain[,8:159] <-sapply(pmlTrain[,8:159], as.numeric)
+pmlTest[,8:159] <-sapply(pmlTest[,8:159], as.numeric)
+
+pmlTrain <- pmlTrain[,8:160]
+pmlTest <- pmlTest[,8:160]
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Next, we'll eliminate the NA columns.
+
+```{r remove.nas}
+# find NA columns
+nas = is.na(apply(pmlTest[,-160], 2, sum))
+
+# drop NA columns from both the training and test data sets
+pmlTest <- pmlTest[, !nas]
+pmlTrain <- pmlTrain[, !nas]
+
+```
+
+### Model Building and Evaluation
+
+52 predictor feature columns remain after droppig the columns that
+contained mostly missing data. The features that remain are the integrated 
+interial measures of pitch, yaw, roll, and total acceleration, and the 
+detailed three-axes data the arm, glove, belt, and dumbell 
+accelerometer, gyro, and magnetometer sensors.
+
+We can now proceed with developing machine
+models to use these feature columns to predict the exercise classe. 
+
+Chose to develop ... models and compare for prediction accuracy.
+
+#### Random Forest Model with Cross-Validation`
+
+
+Why random forest was selected as modeling approach
+Approach to building
+Cross-validation
+Expected out of sample error
+Explanation of model building decisions
+
+```{r partition.data, echo=FALSE}
+
+seed <- 415
+set.seed(seed)
+
+inTrain <- createDataPartition(y=pmlTrain$classe, p=0.7, list=FALSE);
+train <- pmlTrain[inTrain,]
+val <- pmlTrain[-inTrain,]
+
+```
+
+```{r rf.model, cache=TRUE}
+### randomforest with cross-validation
+fit.ctrl <- trainControl(method="cv",number=5)
+fit.rf <- train(classe ~ ., data=train, method="rf",prox=T,
+                     importance=TRUE, ntree=100, trainControl=fit.ctrl)
+
+```
+
+```{r plot.rf.model}
+p.val <- predict(fit.rf, val)
+confusion.val.rf <- confusionMatrix(val$classe, p.val)
+confusion.val.rf
+
+# Discuss sensitivty and specificity by classe 
+# maybe provide plot
+plot(confusion.val.rf$byClass, main="random forest", xlim=c(0.96, 1.005))
+text(confusion.val.rf$byClass[,1]+0.001, confusion.val.rf$byClass[,2],
+        labels = LETTERS[1:5], cex = 0.8)
+
+
+```
+  
+Random Forest predictor importance
+
+
+```{r rf.model.predictor.rank, results="asis", echo=FALSE}
+# show plot of decreasing variable importance
+
+#plot(fit.rf)
+plot(fit.rf$finalModel)
+#plot(varImp(fit.rf), top=15)
+
+
+## obtain the ranked importance of the  predictors based on the
+## randomforest model
+library(tibble)
+var.imp <- varImp(fit.rf)
+pred.rank <- var.imp$importance
+pred.rank <- rownames_to_column(pred.rank, var = "factor")
+#pred.rank.A <- pred.rank %>% select(predictor, A) %>% arrange(desc(A)) %>% slice(1:5)
+
+#pred.rank.A.wd <- spread(pred.rank.A, predictor,A)
+## convert to a function parameterized by classe 
+pred.rank.B <- pred.rank %>% select(factor, B)  %>% slice(1:5) %>% 
+        mutate(sensor = "B") %>% rename(factor.importance = B) 
+pred.rank.B <- arrange(pred.rank.B, desc(factor.importance))
+pred.rank.B <- pred.rank.B %>% mutate(rank = dense_rank(desc(factor.importance)))
+pred.rank.B <- select(pred.rank.B, -factor.importance)
+
+spread.B <- xtable(pred.rank.B %>% spread(rank, factor), auto = TRUE)
+print(spread.B, include.rownames=FALSE, type="html")
+
+## do a bind_rows to add result for each classe to full set
+
+#classe.pred.ranking <- xtable(bind_cols(pred.rank.A, pred.rank.B), auto=TRUE)
+#digits(classe.pred.ranking) <- 2
+#align(classe.pred.ranking) <- rep("r", 5)
+#print(classe.pred.ranking, type="html", include.rownames=FALSE)
+#pred.rank.A <- xtable(pred.rank.A, auto=TRUE)
+#              , align= c("p{0.15\\textwidth}"|
+#               "p{0.5\\textwidth}"| "p{0.4\\textwidth}"))
+#digits(pred.rank.A) <- 2
+#print(pred.rank.A, type="html", include.rownames=FALSE)
+ 
+ 
+ 
+```
+  
+   
+ 
+#### Classification Support Vector Machine (SVM)
+ 
+```{r svm.model, cache=TRUE}
+
+set.seed(seed)
+
+# obj <- tune.svm(classe ~ ., data=train,
+#       gamma = 2^(-2:2), cost = 2^(2:4))
+
+# obj.2 <- tune.svm(classe ~ ., data=train,
+#       gamma = seq(0.01,0.5, by= 0.05), cost = 2^(2:8))
+
+
+fit.svm <- svm(classe ~ ., data=train,
+            numberCores=4, samplingSize=.25,
+            cost=256, gamma=0.06, cross=10)
+
+```
+
+
+
+```{r review.SVM}
+
+fit.svm
+
+svm.predict.val <- predict(fit.svm, val[-53])
+confusion.svm.val <- confusionMatrix(val$classe, svm.predict.val)
+confusion.svm.val
+
+```
+
+ 
